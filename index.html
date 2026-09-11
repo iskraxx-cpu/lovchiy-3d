@@ -30,7 +30,12 @@
   .hdr { display: none; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
   .hdr-t { min-width: 0; }
   .nums { font-size: 10.5px; color: #8b98a4; line-height: 1.45; margin-top: 3px; }
-  #b-toggle { flex: none; margin: 0; padding: 7px 11px; }
+  .hdr-b { flex: none; display: flex; gap: 6px; }
+  .hdr-b button { margin: 0; padding: 7px 11px; }
+  #ui.hidden { display: none; }
+  #b-show { position: fixed; left: 6px; bottom: 6px; z-index: 10; display: none; margin: 0;
+    padding: 9px 14px; font-size: 12.5px; background: rgba(16,26,36,.88); border-color: #2b3d4d; border-radius: 10px; }
+  #b-show.on { display: block; }
   @media (max-width: 760px) {
     #ui { left: 6px; right: 6px; top: auto; bottom: 6px; width: auto; padding: 10px 12px;
           max-height: 44vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -53,7 +58,7 @@
       <h1 id="ttl">ЗОК «Ловчий»</h1>
       <div class="nums" id="pnums"></div>
     </div>
-    <button id="b-toggle">Настройки</button>
+    <div class="hdr-b"><button id="b-toggle">Настройки</button><button id="b-hide">Скрыть</button></div>
   </div>
   <div class="sub" id="stl"></div>
   <div class="grp">
@@ -84,6 +89,7 @@
   <span id="stat">прогиб 0,0 м</span>
 </div>
 <div id="hint">ЛКМ — вращать · колесо — приблизить · ПКМ — сдвинуть</div>
+<button id="b-show">ТР-01 · панель</button>
 <div id="arnote"></div>
 <div id="err">Не удалось загрузить библиотеку three.js.<br>Проверьте подключение к сети.</div>
 
@@ -606,6 +612,15 @@
   setMini(innerWidth <= 760);
   togEl.addEventListener('click', function () { setMini(!uiEl.classList.contains('mini')); });
   addEventListener('resize', function () { if (innerWidth > 760) uiEl.classList.remove('mini'); });
+  // ── панель можно спрятать целиком: остаётся плашка с кодом решения
+  const showEl = document.getElementById('b-show');
+  function setHidden(on) {
+    uiEl.classList.toggle('hidden', on);
+    showEl.classList.toggle('on', on);
+    showEl.textContent = S.title.split(' · ')[0] + ' · панель';
+  }
+  document.getElementById('b-hide').addEventListener('click', function () { setHidden(true); });
+  showEl.addEventListener('click', function () { setHidden(false); });
 
   let anim = null;
   document.getElementById('b-play').addEventListener('click', function () { anim = { t: 0 }; drone.visible = true; });
