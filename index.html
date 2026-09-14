@@ -63,7 +63,7 @@
   <div class="sub" id="stl"></div>
   <div class="grp">
     <div class="lbl">Типовое решение</div>
-    <button data-s="rvs">ТР-01</button><button data-s="building">ТР-02</button><button data-s="rack">ТР-03</button><button data-s="twotier">ТР-04</button><button data-s="oru">ТР-05</button><button data-s="facade">ТР-06</button>
+    <button data-s="rvs">ТР-01</button><button data-s="building">ТР-02</button><button data-s="rack">ТР-03</button><button data-s="twotier">ТР-04</button><button data-s="oru">ТР-05</button><button data-s="facade">ТР-06</button><button data-s="lesa">ТР-07</button>
   </div>
   <div class="grp grp-el">
     <div class="lbl">Элементы</div>
@@ -137,6 +137,13 @@
       L: 70, W: 30, HM: 18, SAG: 0, sides: false, vertical: true, obj: 'building',
       camK: 0.72, camT: -0.5, camY: 0.36, camP: 1.27,
       note: 'экран на выносных кронштейнах, отступ от фасада 3 м',
+    },
+    lesa: {
+      title: 'ТР-07 · ЗОК на инвентарных лесах',
+      sub: 'Полотно на модульных лесах: без фундаментов и сварки, п. 6.1.3 и 6.3.1',
+      L: 108, W: 22, HM: 15, SAG: 2.4, sides: false, scaffold: true, obj: 'rack',
+      camK: 1.02, camT: -0.7, camY: 0.5, camP: 1.08,
+      note: 'обстройка чашечными лесами, ярусы через 2 м',
     },
   };
   let KEY = new URLSearchParams(location.search).get('s') || 'rvs';
@@ -239,6 +246,41 @@
     m.position.copy(a).lerp(c, 0.5);
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), c.clone().sub(a).normalize());
     m.castShadow = true; return m;
+  }
+
+  function scaffoldRow(z) {
+    const H = S.HM, lift = 2.0, bay = 3.0, depth = 1.4;
+    const zs = [z - depth / 2, z + depth / 2];
+    const n = Math.round(S.L / bay);
+    for (let i = 0; i <= n; i++) {
+      const x = -S.L / 2 + i * bay;
+      zs.forEach(function (zz) {
+        const p = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, H, 8), steel);
+        p.position.set(x, H / 2, zz); p.castShadow = true; gMast.add(p);
+        const jack = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.5), steelDark);
+        jack.position.set(x, 0.08, zz); jack.receiveShadow = true; gMast.add(jack);
+      });
+      // поперечные ригели рамы
+      for (let k = 1; k * lift <= H; k++) {
+        gMast.add(rod(new THREE.Vector3(x, k * lift, zs[0]), new THREE.Vector3(x, k * lift, zs[1]), 0.05, steel));
+      }
+      if (i === n) continue;
+      // продольные ригели и диагонали через ярус
+      for (let k = 1; k * lift <= H; k++) {
+        zs.forEach(function (zz) {
+          gMast.add(rod(new THREE.Vector3(x, k * lift, zz), new THREE.Vector3(x + bay, k * lift, zz), 0.05, steel));
+        });
+        if ((i + k) % 2 === 0) {
+          gMast.add(rod(new THREE.Vector3(x, (k - 1) * lift, zs[0]), new THREE.Vector3(x + bay, k * lift, zs[0]), 0.04, steel));
+        }
+      }
+      // настилы на двух ярусах
+      [2, 5].forEach(function (k) {
+        if (k * lift > H) return;
+        const d = new THREE.Mesh(new THREE.BoxGeometry(bay - 0.1, 0.06, depth - 0.2), steelDark);
+        d.position.set(x + bay / 2, k * lift + 0.03, z); d.castShadow = true; d.receiveShadow = true; gMast.add(d);
+      });
+    }
   }
 
   function buildObject(kind) {
@@ -444,14 +486,20 @@
       return;
     }
 
+    if (S.scaffold) {
+      scaffoldRow(-S.W / 2);
+      scaffoldRow(S.W / 2);
+    }
     const dependent = !!S.roofMast;
     const yBase = dependent ? S.roofMast : 0;
     const mastH = S.HM - yBase;
     const cols = Math.max(2, Math.round(S.L / 46) + 1);
-    const pos = [];
-    for (let i = 0; i < cols; i++) {
-      const x = -S.L / 2 + (S.L * i) / (cols - 1);
-      pos.push([x, -S.W / 2], [x, S.W / 2]);
+    const pos = S.scaffold ? [] : [];
+    if (!S.scaffold) {
+      for (let i = 0; i < cols; i++) {
+        const x = -S.L / 2 + (S.L * i) / (cols - 1);
+        pos.push([x, -S.W / 2], [x, S.W / 2]);
+      }
     }
     pos.forEach(function (pt) {
       const x = pt[0], z = pt[1];
