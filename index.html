@@ -109,8 +109,9 @@
     building: {
       title: 'ТР-02 · Здание операторной и КИП',
       sub: 'Сетка на зависимом каркасе, стойки по несущим осям, п. 6.3.2',
-      L: 52, W: 20, HM: 25, SAG: 3.4, sides: false, obj: 'building', roofMast: 13.7,
-      note: 'усиление: канаты 6,0 мм, ячея 500 × 500 мм',
+      L: 39, W: 15, HM: 9.6, SAG: 0.9, sides: false, obj: 'operator', roofMast: 5.6,
+      camK: 1.0, camY: 0.5,
+      note: 'полотно в 4 м над кровлей, высота — по расчёту расстояния безопасности',
     },
     rack: {
       title: 'ТР-03 · Технологическая эстакада',
@@ -126,10 +127,10 @@
     },
     oru: {
       title: 'ТР-05 · ОРУ подстанции',
-      sub: 'Наклонный экран под 45° и брустверы, п. 6.1.1.1 и п. 6.1.6',
-      L: 92, W: 42, HM: 28, SAG: 0, sides: false, incline: true, obj: 'oru',
-      camK: 0.56, camT: -0.5, camY: 0.24, camP: 1.24, objX: -11,
-      note: 'экран 45°, брустверы по периметру',
+      sub: 'Навес над ячейкой трансформатора выше ошиновки, брустверы, п. 6.1.1.1 и п. 6.1.6',
+      L: 46, W: 32, HM: 25, SAG: 1.2, sides: false, obj: 'oru',
+      camK: 1.0, camY: 0.42,
+      note: 'навес выше ошиновки на Аф-з по ПУЭ плюс прогиб, брустверы с трёх сторон',
     },
     facade: {
       title: 'ТР-06 · Вертикальная навеска по фасаду',
@@ -317,6 +318,27 @@
           w.position.set(-BW / 2 + 4 + i * 5, 7.4, s * (BD / 2 + 0.05)); g.add(w);
         });
       }
+    } else if (kind === 'operator') {
+      const BW = 40, BD = 16, BH = 5.0;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(BW, BH, BD), concrete);
+      b.position.y = BH / 2; b.castShadow = true; b.receiveShadow = true; g.add(b);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(BW + 0.4, 0.3, BD + 0.4), steelDark);
+      roof.position.y = BH + 0.15; roof.receiveShadow = true; g.add(roof);
+      [[0, BD / 2, BW + 0.4, 0.3], [0, -BD / 2, BW + 0.4, 0.3], [BW / 2, 0, 0.3, BD], [-BW / 2, 0, 0.3, BD]].forEach(function (p) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(p[2], 0.9, p[3]), concrete);
+        m.position.set(p[0], BH + 0.45, p[1]); m.castShadow = true; g.add(m);
+      });
+      const win = new THREE.MeshStandardMaterial({ color: 0x2c4457, metalness: 0.5, roughness: 0.25 });
+      for (let i = 0; i < 9; i++) {
+        [1, -1].forEach(function (sd) {
+          const w = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.5, 0.2), win);
+          w.position.set(-BW / 2 + 4 + i * 4, 2.9, sd * (BD / 2 + 0.05)); g.add(w);
+        });
+      }
+      [[-8, 2], [6, -3]].forEach(function (p) {          // блоки кондиционеров на кровле
+        const u = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 1.4), white);
+        u.position.set(p[0], BH + 0.9, p[1]); u.castShadow = true; g.add(u);
+      });
     } else if (kind === 'rack') {
       const BW = 104, BH = 9;
       const beam = new THREE.Mesh(new THREE.BoxGeometry(BW, 0.9, 7), steelDark);
@@ -358,12 +380,17 @@
           new THREE.MeshStandardMaterial({ color: 0xd8d2c6, roughness: 0.6 }));
         bush.position.set(x, 10.5, 0); bush.castShadow = true; g.add(bush);
       });
-      for (let i = 0; i < 9; i++) {
-        for (let t = 0; t < 2; t++) {
-          if (t === 1 && (i === 0 || i === 8)) continue;
-          const gb = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.2, 2.4), sandMat);
-          gb.position.set(-13.6 + i * 3.4, 1.1 + t * 2.15, -9 + t * 0.4);
-          gb.castShadow = true; gb.receiveShadow = true; g.add(gb);
+      function gab(x, y, z, rotY) {
+        const gb = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.2, 2.4), sandMat);
+        gb.position.set(x, y, z); gb.rotation.y = rotY || 0;
+        gb.castShadow = true; gb.receiveShadow = true; g.add(gb);
+      }
+      for (let t = 0; t < 2; t++) {
+        const y = 1.1 + t * 2.15;
+        for (let i = 0; i < 7; i++) gab(-10.2 + i * 3.4, y, -8.2 + t * 0.4);            // фронт
+        for (let i = 0; i < 4; i++) {                                                // боковые стороны
+          gab(-11.4 + t * 0.4, y, -5.6 + i * 3.4, Math.PI / 2);
+          gab(11.4 - t * 0.4, y, -5.6 + i * 3.4, Math.PI / 2);
         }
       }
     }
@@ -622,7 +649,7 @@
   function syncUI() {
     document.getElementById('ttl').textContent = S.title;
     document.getElementById('stl').textContent = S.sub;
-    document.getElementById('h1').textContent = 'пролёт ' + S.L + ' × ' + S.W + ' м · мачты ' + S.HM + ' м';
+    document.getElementById('h1').textContent = dimsText();
     document.getElementById('h2').textContent = S.note;
     numsLine();
     document.querySelectorAll('[data-s]').forEach(function (b) { b.classList.toggle('on', b.dataset.s === KEY); });
@@ -646,8 +673,14 @@
 
   const statEl = document.getElementById('stat');
   const numsEl = document.getElementById('pnums');
+  function dimsText() {
+    const fmt = function (v) { return String(Math.round(v * 10) / 10).replace('.', ','); };
+    return 'пролёт ' + S.L + ' × ' + S.W + ' м · ' + (S.roofMast
+      ? 'стойки ' + fmt(S.HM - S.roofMast) + ' м над кровлей'
+      : 'мачты ' + fmt(S.HM) + ' м');
+  }
   function numsLine() {
-    numsEl.textContent = 'пролёт ' + S.L + ' × ' + S.W + ' м · мачты ' + S.HM + ' м · ' + statEl.textContent;
+    numsEl.textContent = dimsText() + ' · ' + statEl.textContent;
   }
 
   // ── свёрнутая панель на узком экране
