@@ -86,7 +86,7 @@
   <b id="h1">—</b><br>
   сетка «Ловчий» 80 × 100, проволока 2,7 мм<br>
   <span id="h2">—</span><br>
-  <span id="stat">прогиб 0,0 м</span>
+  <span id="stat">сцена удара — анимация</span>
 </div>
 <div id="hint">ЛКМ — вращать · колесо — приблизить · ПКМ — сдвинуть</div>
 <button id="b-show">ТР-01 · панель</button>
@@ -947,7 +947,7 @@
     numsLine();
     document.querySelectorAll('[data-s]').forEach(function (b) { b.classList.toggle('on', b.dataset.s === KEY); });
     document.getElementById('b-play').style.display = (S.incline || S.vertical || S.fence) ? 'none' : '';
-    statEl.textContent = S.stat || 'прогиб 0,0 м';
+    statEl.textContent = S.stat || 'сцена удара — анимация';
     numsLine();
   }
   function goScenario(k) {
@@ -1019,7 +1019,7 @@
     }
     if (t >= 1.6) drone.position.set(dentX * S.L / 2, sagY(dentX, dentZ) + 0.9, dentZ * S.W / 2);
     updateNet(); buildRopes();
-    statEl.textContent = 'прогиб ' + dent.toFixed(1).replace('.', ',') + ' м';
+    statEl.textContent = 'сцена удара — анимация, не расчёт';
     numsLine();
   }
 
