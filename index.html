@@ -63,7 +63,7 @@
   <div class="sub" id="stl"></div>
   <div class="grp">
     <div class="lbl">Типовое решение</div>
-    <button data-s="rvs">ТР-01</button><button data-s="building">ТР-02</button><button data-s="rack">ТР-03</button><button data-s="twotier">ТР-04</button><button data-s="oru">ТР-05</button><button data-s="facade">ТР-06</button><button data-s="lesa">ТР-07</button>
+    <button data-s="rvs">ТР-01</button><button data-s="building">ТР-02</button><button data-s="rack">ТР-03</button><button data-s="twotier">ТР-04</button><button data-s="oru">ТР-05</button><button data-s="facade">ТР-06</button><button data-s="lesa">ТР-07</button><button data-s="tr08">ТР-08</button>
   </div>
   <div class="grp grp-el">
     <div class="lbl">Элементы</div>
@@ -146,6 +146,25 @@
       camK: 1.02, camT: -0.7, camY: 0.5, camP: 1.08,
       note: 'обстройка чашечными лесами, ярусы через 2 м',
     },
+    tr08: {
+      // отдельно стоящее ограждение: ось x — вдоль ограждения, подлёт со стороны z > 0,
+      // защищаемое оборудование за ограждением при z < 0
+      title: 'ТР-08 · Ограждение на стойках с амортизаторами',
+      sub: 'Канаты крепят к стойкам через пары КНР-180 — энергопоглощающие устройства, п. 6.1.8',
+      L: 12.5, W: 12, HM: 2.5, SAG: 0, fence: true, obj: 'valves', objZ: -7.4, padColor: 0x4f4c47,
+      ropeH: [2.35, 1.35, 0.35], edge: 0.6,
+      tileM: 0.6,   // ограждение высотой 2 м: тайл мельче общего TILE_M, ячейка всё равно укрупнена
+      pad: [26, 22, -3.5],
+      near: 0.05, rMin: 1.5, rMax: 120, panK: 0.015, shadowR: 16, arScale: 1 / 40,
+      cams: [
+        { rad: 10.011, theta: 2.272, phi: 1.387, tx: -1.96, ty: 1.07, tz: -0.54 },  // 3/4 со стороны подлёта, глаз 2,9 м; вписан в кадрирование prep_3d
+        { rad: 3.8, theta: 1.123, phi: 1.366, tx: -5.85, ty: 1.3, tz: 0 },           // узлы у стойки
+        { rad: 12.5, theta: 1.85, phi: 1.62, tx: -0.6, ty: 1.25, tz: -0.5 },        // от земли
+        { rad: 24, theta: 1.95, phi: 0.62, tx: 0, ty: 0.5, tz: -3 },                 // план: ограждение и зона за ним
+      ],
+      note: 'канаты ⌀8 мм через 1,0 м, 12 амортизаторов КНР-180',
+      stat: 'расчётный прогиб каната 4,2 м · свободная зона ≥ 5,0 м + Rбез',
+    },
   };
   let KEY = new URLSearchParams(location.search).get('s') || 'rvs';
   if (!SCEN[KEY]) KEY = 'rvs';
@@ -199,17 +218,21 @@
   const concrete = new THREE.MeshStandardMaterial({ color: 0x8e969c, roughness: 0.92 });
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x8a938a, roughness: 0.95 });
   const sandMat = new THREE.MeshStandardMaterial({ color: 0xb9ac90, roughness: 0.98 });
+  // ТР-08: кожух амортизатора КНР-180 — контрастный, чтобы узлы читались на кадре; оцинкованный такелаж
+  const kojMat = new THREE.MeshStandardMaterial({ color: 0x8a2c08, metalness: 0.2, roughness: 0.6 });
+  const galv = new THREE.MeshStandardMaterial({ color: 0xc3cad0, metalness: 0.9, roughness: 0.3 });
 
   const TILE_M = 1.7;
   const loader = new THREE.TextureLoader();
   let baseImg = null;
   const baseTex = loader.load(TEX, function (t) { baseImg = t.image; if (window.__built) build(); });
-  function netMaterial(wm, hm) {
+  function netMaterial(wm, hm, tm) {
     let t;
     if (baseImg) { t = new THREE.Texture(baseImg); t.needsUpdate = true; }
     else { t = loader.load(TEX); }
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(wm / TILE_M, hm / (TILE_M * 0.8));
+    const k = tm || TILE_M;
+    t.repeat.set(wm / k, hm / (k * 0.8));
     t.anisotropy = 16;
     return new THREE.MeshStandardMaterial({
       map: t, transparent: true, opacity: 0.98, alphaTest: 0, depthWrite: false,
@@ -242,8 +265,8 @@
     base.position.y = 0.35; base.castShadow = true; base.receiveShadow = true; g.add(base);
     return g;
   }
-  function rod(a, c, r, mat) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, a.distanceTo(c), 6), mat || cable);
+  function rod(a, c, r, mat, seg) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, a.distanceTo(c), seg || 6), mat || cable);
     m.position.copy(a).lerp(c, 0.5);
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), c.clone().sub(a).normalize());
     m.castShadow = true; return m;
@@ -282,6 +305,98 @@
         d.position.set(x + bay / 2, k * lift + 0.03, z); d.castShadow = true; d.receiveShadow = true; gMast.add(d);
       });
     }
+  }
+
+  // ── ТР-08: ограждение на двух стойках. Канат на каждом конце — петля с коушем и зажимами,
+  // от коуша пара КНР-180 расходится к стойке, каждый амортизатор через скобу на свой уголок.
+  function fenceTorus(r, tube, p, normal, mat, grp, sx) {
+    const m = new THREE.Mesh(new THREE.TorusGeometry(r, tube, 8, 28), mat);
+    m.position.copy(p);
+    if (sx) m.scale.x = sx;
+    if (normal) m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal.clone().normalize());
+    m.castShadow = true; grp.add(m); return m;
+  }
+  // геометрия узла: xs — ось стойки, sg — направление от стойки в пролёт, h — высота каната
+  function fenceNodeGeom(xs, sg, h) {
+    const face = xs + sg * 0.08;                     // грань стойки 160 × 160
+    const dy = 0.11, br = 0.27;                      // разнос уголков от оси каната; ветвь «скоба — амортизатор — скоба»
+    const reach = Math.sqrt(br * br - dy * dy);
+    const ax = face + sg * (0.05 + reach);           // точка схода пары — скоба на коуше
+    return {
+      face: face, dy: dy,
+      holes: [new THREE.Vector3(face + sg * 0.045, h + dy, 0), new THREE.Vector3(face + sg * 0.045, h - dy, 0)],
+      A: new THREE.Vector3(ax, h, 0),
+      T: ax + sg * 0.05,                             // центр коуша
+      tip: ax + sg * 0.1,                            // вершина петли — отсюда канат идёт в пролёт
+    };
+  }
+  function fenceHardware(xs, sg, h) {
+    const G = fenceNodeGeom(xs, sg, h);
+    const Z = new THREE.Vector3(0, 0, 1);
+    G.holes.forEach(function (P, k) {
+      const s = k === 0 ? 1 : -1;
+      // уголок крепления 63 × 63: полка к стойке и полка с отверстием под скобу
+      const v = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.063, 0.09), steelDark);
+      v.position.set(G.face + sg * 0.004, P.y - s * 0.028, 0); v.castShadow = true; gMast.add(v);
+      const hz = new THREE.Mesh(new THREE.BoxGeometry(0.066, 0.008, 0.09), steelDark);
+      hz.position.set(G.face + sg * 0.033, P.y, 0); hz.castShadow = true; gMast.add(hz);
+      // ветвь: скоба на уголке → проушина → КНР-180 в кожухе → проушина → общая скоба на коуше
+      const d = G.A.clone().sub(P).normalize();
+      const side = new THREE.Vector3().crossVectors(d, Z).normalize();
+      const at = function (t) { return P.clone().add(d.clone().multiplyScalar(t)); };
+      fenceTorus(0.024, 0.006, at(0.02), Z, galv, gMast);
+      fenceTorus(0.014, 0.005, at(0.052), side, galv, gMast);
+      fenceTorus(0.014, 0.005, at(0.248), side, galv, gMast);
+      const cap1 = rod(at(0.064), at(0.082), 0.022, steelDark, 12), cap2 = rod(at(0.218), at(0.236), 0.022, steelDark, 12);
+      const body = rod(at(0.08), at(0.22), 0.036, kojMat, 18);
+      [cap1, cap2, body].forEach(function (m) { gMast.add(m); });
+    });
+    fenceTorus(0.03, 0.007, G.A, Z, galv, gMast);       // общая скоба пары на коуше
+  }
+  function fenceRopeEnd(xs, sg, h) {
+    const G = fenceNodeGeom(xs, sg, h);
+    const V = function (x, y) { return new THREE.Vector3(x, y, 0); };
+    // коуш и петля каната вокруг него
+    fenceTorus(0.026, 0.008, V(G.T, h), null, galv, gRope, 1.55);
+    fenceTorus(0.036, 0.0075, V(G.T, h), null, cable, gRope, 1.4);
+    // свободный конец петли идёт вдоль каната, три зажима ⌀8 DIN 741 с шагом около 6d
+    gRope.add(rod(V(G.tip - sg * 0.01, h + 0.02), V(G.tip + sg * 0.15, h + 0.018), 0.0075));
+    [0.035, 0.085, 0.135].forEach(function (t) {
+      const x = G.tip + sg * t;
+      const sd = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.046, 0.034), galv);
+      sd.position.set(x, h + 0.01, 0.012); sd.castShadow = true; gRope.add(sd);
+      fenceTorus(0.022, 0.0045, V(x, h + 0.01), new THREE.Vector3(1, 0, 0), galv, gRope);
+    });
+    return G.tip;
+  }
+  function fenceRopes() {
+    const xa = S.L / 2;
+    S.ropeH.forEach(function (h) {
+      const x0 = fenceRopeEnd(-xa, 1, h), x1 = fenceRopeEnd(xa, -1, h);
+      gRope.add(rod(new THREE.Vector3(x0, h, 0), new THREE.Vector3(x1, h, 0), 0.0115));
+    });
+  }
+  function buildFence() {
+    const xa = S.L / 2, e = S.edge, hs = S.ropeH;
+    [-1, 1].forEach(function (sd) {
+      const xs = sd * xa, sg = -sd;
+      // стойка — труба 160 × 160, оголовок, бетонный оголовок фундамента
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, S.HM, 0.16), steel);
+      post.position.set(xs, S.HM / 2, 0); post.castShadow = true; post.receiveShadow = true; gMast.add(post);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.014, 0.22), steelDark);
+      cap.position.set(xs, S.HM + 0.007, 0); cap.castShadow = true; gMast.add(cap);
+      const fnd = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, 0.6), concrete);
+      fnd.position.set(xs, 0.06, 0); fnd.castShadow = true; fnd.receiveShadow = true; gMast.add(fnd);
+      hs.forEach(function (h) { fenceHardware(xs, sg, h); });
+    });
+    // полотно между верхним и нижним канатами, по краям — кромочная проволока
+    const wN = S.L - 2 * e, hN = hs[0] - hs[hs.length - 1];
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(wN, hN), netMaterial(wN, hN, S.tileM));
+    m.position.set(0, hs[hs.length - 1] + hN / 2, 0); m.renderOrder = 2;
+    gNet.add(m);
+    [-1, 1].forEach(function (sd) {
+      gNet.add(rod(new THREE.Vector3(sd * wN / 2, hs[hs.length - 1], 0), new THREE.Vector3(sd * wN / 2, hs[0], 0), 0.006, galv));
+    });
   }
 
   function buildObject(kind) {
@@ -474,6 +589,84 @@
           box(0.12, 2.6, 0.12, px, 1.3, pz, steelDark);
         }
       });
+    } else if (kind === 'valves') {
+      // ТР-08: узел задвижек на трубопроводе с обводной линией и шкаф управления.
+      // Лицевая сторона — к ограждению (+z). Высота оборудования до 2,2 м.
+      const pipeM = new THREE.MeshStandardMaterial({ color: 0xc9cfd4, metalness: 0.45, roughness: 0.45 });
+      const valveM = new THREE.MeshStandardMaterial({ color: 0x55677a, metalness: 0.55, roughness: 0.5 });
+      const driveM = new THREE.MeshStandardMaterial({ color: 0x8e99a1, metalness: 0.35, roughness: 0.55 });
+      const cabM = new THREE.MeshStandardMaterial({ color: 0xd9dee2, metalness: 0.2, roughness: 0.6 });
+      const box = function (w, h, d, x, y, z, mat) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+        m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m;
+      };
+      const V = function (x, y, z) { return new THREE.Vector3(x, y, z); };
+      const pipe = function (a, c, r, mat) { const m = rod(a, c, r, mat || pipeM, 20); m.receiveShadow = true; g.add(m); return m; };
+      const disc = function (p, r, t, axis, mat) {        // фланец, диск по оси axis
+        const a = p.clone().add(axis.clone().multiplyScalar(-t / 2)), c = p.clone().add(axis.clone().multiplyScalar(t / 2));
+        return pipe(a, c, r, mat || valveM);
+      };
+      const elbow = function (R, r, cx, cy, cz, rotZ) {    // отвод 90° в плоскости xy
+        const m = new THREE.Mesh(new THREE.TorusGeometry(R, r, 12, 16, Math.PI / 2), pipeM);
+        m.position.set(cx, cy, cz); m.rotation.z = rotZ; m.castShadow = true; g.add(m);
+      };
+      const X = V(1, 0, 0), Y = V(0, 1, 0), Zv = V(0, 0, 1);
+      // площадка узла
+      box(13.4, 0.15, 4.4, 0.6, 0.075, 0, concrete);
+      // основная линия DN 400: подъём из земли, горизонтальный участок, опуск в землю
+      const R0 = 0.21, yA = 1.0, zA = 0.55, xe = 4.3, Rb = 0.55;
+      pipe(V(-xe, -0.2, zA), V(-xe, yA - Rb, zA), R0);
+      pipe(V(xe, -0.2, zA), V(xe, yA - Rb, zA), R0);
+      elbow(Rb, R0, -xe + Rb, yA - Rb, zA, Math.PI / 2);
+      elbow(Rb, R0, xe - Rb, yA - Rb, zA, 0);
+      pipe(V(-xe + Rb, yA, zA), V(xe - Rb, yA, zA), R0);
+      [-xe, xe].forEach(function (x) { box(0.9, 0.12, 0.9, x, 0.06, zA, concrete); });
+      // задвижка: фланцы, корпус, крышка, шпиндель, электропривод с ручным дублёром
+      const gate = function (x, z, r, drive) {
+        disc(V(x - 0.3, yA, z), r + 0.09, 0.05, X); disc(V(x + 0.3, yA, z), r + 0.09, 0.05, X);
+        pipe(V(x - 0.28, yA, z), V(x + 0.28, yA, z), r + 0.035, valveM);
+        pipe(V(x, yA - r - 0.06, z), V(x, yA + r + 0.06, z), r + 0.07, valveM);
+        disc(V(x, yA + r + 0.09, z), r * 0.9, 0.05, Y);
+        const top = yA + r + 0.11 + (drive ? 0.42 : 0.5);
+        pipe(V(x, yA + r + 0.11, z), V(x, top, z), drive ? 0.12 : 0.05, valveM);
+        if (drive) {
+          box(0.44, 0.38, 0.36, x, top + 0.19, z, driveM);
+          pipe(V(x, top + 0.16, z + 0.18), V(x, top + 0.16, z + 0.46), 0.11, driveM);
+          const hw = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.017, 8, 28), steelDark);
+          hw.position.set(x + 0.27, top + 0.19, z); hw.rotation.y = Math.PI / 2; hw.castShadow = true; g.add(hw);
+        } else {
+          const hw = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.016, 8, 28), steelDark);
+          hw.position.set(x, top, z); hw.rotation.x = Math.PI / 2; hw.castShadow = true; g.add(hw);
+        }
+      };
+      gate(-1.9, zA, R0, true);
+      gate(1.9, zA, R0, true);
+      // опоры трубопровода: бетонные тумбы и ложементы
+      [-3.4, 0, 3.4].forEach(function (x) {
+        box(0.5, yA - R0 - 0.15 - 0.06, 0.6, x, 0.15 + (yA - R0 - 0.21) / 2, zA, concrete);
+        box(0.55, 0.06, 0.62, x, yA - R0 - 0.03, zA, steelDark);
+      });
+      // обводная линия DN 150 с задвижкой, за основной линией
+      const r1 = 0.085, zB = -0.75, xb = 2.75;
+      [-xb, xb].forEach(function (x) {
+        pipe(V(x, yA, zA), V(x, yA, zB), r1);
+        const j = new THREE.Mesh(new THREE.SphereGeometry(r1 * 1.15, 14, 10), pipeM);
+        j.position.set(x, yA, zB); j.castShadow = true; g.add(j);
+        disc(V(x, yA, zA - R0 - 0.06), r1 + 0.06, 0.04, Zv);
+        box(0.35, yA - r1 - 0.15, 0.4, x, 0.15 + (yA - r1 - 0.15) / 2, zB, concrete);
+      });
+      pipe(V(-xb, yA, zB), V(xb, yA, zB), r1);
+      gate(0, zB, r1, false);
+      // продувочная свеча на перемычке между задвижками
+      pipe(V(0, yA + R0, zA), V(0, 2.0, zA), 0.045);
+      disc(V(0, 1.55, zA), 0.09, 0.03, Y);
+      // шкаф управления приводами на раме и кабельный лоток к задвижкам
+      const cx = 5.9, cz = 0.4;
+      [-0.32, 0.32].forEach(function (dx) { box(0.06, 0.4, 0.06, cx + dx, 0.35, cz, steelDark); });
+      box(0.8, 1.6, 0.45, cx, 1.35, cz, cabM);
+      box(0.9, 0.05, 0.55, cx, 2.17, cz, cabM);
+      box(0.012, 1.4, 0.012, cx + 0.05, 1.35, cz + 0.23, steelDark);
+      box(4.2, 0.1, 0.3, (cx - 0.5 + 1.9) / 2 + 0.2, 0.2, cz + 0.65, steelDark);
     }
     return g;
   }
@@ -485,6 +678,7 @@
   world.add(gObj, gMast, gNet, gRope, gSide, gGuy);
   const pad = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), concrete);
   pad.rotation.x = -Math.PI / 2; pad.position.y = 0.02; pad.receiveShadow = true; world.add(pad);
+  const padAlt = new THREE.MeshStandardMaterial({ color: 0x55595d, roughness: 0.97 });   // площадка со своим покрытием
 
   function clear(g) {
     while (g.children.length) {
@@ -504,6 +698,7 @@
 
   function buildRopes() {
     clear(gRope);
+    if (S.fence) { fenceRopes(); return; }
     if (S.vertical) {
       const z = -(13 + 3), H = 17;
       [0.6, H / 2, H - 0.3].forEach(function (y) {
@@ -550,8 +745,23 @@
 
     gObj.add(buildObject(S.obj));
     gObj.position.x = S.objX || 0;
+    gObj.position.z = S.objZ || 0;
     pad.geometry.dispose();
-    pad.geometry = new THREE.PlaneGeometry(S.L + 26, S.W + 26);
+    const pd = S.pad || [S.L + 26, S.W + 26, 0];
+    pad.geometry = new THREE.PlaneGeometry(pd[0], pd[1]);
+    pad.position.z = pd[2];
+    if (S.padColor) { padAlt.color.setHex(S.padColor); pad.material = padAlt; } else pad.material = concrete;
+    // мелкая сцена (ТР-08) — плотнее карта теней и ближе передняя плоскость камеры
+    const sr = S.shadowR || 170, sc = sun.shadow.camera;
+    sc.left = -sr; sc.right = sr; sc.top = sr; sc.bottom = -sr; sc.updateProjectionMatrix();
+    sun.shadow.bias = S.shadowBias || 0;
+    camera.near = S.near || 0.5; camera.updateProjectionMatrix();
+
+    if (S.fence) {
+      buildFence();
+      buildRopes();
+      return;
+    }
 
     if (S.vertical) {
       const BD = 26, BH = 13.5, OFF = 3, z = -(BD / 2 + OFF), H = 17;
@@ -672,6 +882,7 @@
   const target = new THREE.Vector3(0, 12, 0);
   let rad = 160, theta = -0.72, phi = 1.02;
   function camPresets() {
+    if (S.cams) return S.cams;
     const d = Math.max(S.L, S.W) * (S.camK || 1);
     const t0 = (S.camT !== undefined) ? S.camT : -0.72;
     return [
@@ -696,7 +907,7 @@
   function setCam(i) {
     const c = camPresets()[i];
     radBase = c.rad; rad = radBase * fitK();
-    theta = c.theta; phi = c.phi; target.set(0, c.ty, 0); applyCam();
+    theta = c.theta; phi = c.phi; target.set(c.tx || 0, c.ty, c.tz || 0); applyCam();
   }
 
   let drag = null;
@@ -707,7 +918,7 @@
     if (!drag) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     drag.x = e.clientX; drag.y = e.clientY;
-    if (drag.b === 2) { target.x -= dx * 0.12; target.z -= dy * 0.12; }
+    if (drag.b === 2) { const k = S.panK || 0.12; target.x -= dx * k; target.z -= dy * k; }
     else { theta -= dx * 0.005; phi = Math.max(0.12, Math.min(1.52, phi - dy * 0.004)); }
     applyCam();
   });
@@ -718,13 +929,13 @@
     e.preventDefault();
     const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
                          e.touches[0].clientY - e.touches[1].clientY);
-    if (pinch) { rad = Math.max(30, Math.min(800, rad * (pinch / d))); radBase = rad / fitK(); applyCam(); }
+    if (pinch) { rad = Math.max(S.rMin || 30, Math.min(S.rMax || 800, rad * (pinch / d))); radBase = rad / fitK(); applyCam(); }
     pinch = d;
   }, { passive: false });
   el.addEventListener('touchend', function () { pinch = 0; });
   el.addEventListener('wheel', function (e) {
     e.preventDefault();
-    rad = Math.max(30, Math.min(800, rad * (1 + Math.sign(e.deltaY) * 0.09)));
+    rad = Math.max(S.rMin || 30, Math.min(S.rMax || 800, rad * (1 + Math.sign(e.deltaY) * 0.09)));
     radBase = rad / fitK(); applyCam();
   }, { passive: false });
 
@@ -735,7 +946,9 @@
     document.getElementById('h2').textContent = S.note;
     numsLine();
     document.querySelectorAll('[data-s]').forEach(function (b) { b.classList.toggle('on', b.dataset.s === KEY); });
-    document.getElementById('b-play').style.display = (S.incline || S.vertical) ? 'none' : '';
+    document.getElementById('b-play').style.display = (S.incline || S.vertical || S.fence) ? 'none' : '';
+    statEl.textContent = S.stat || 'прогиб 0,0 м';
+    numsLine();
   }
   function goScenario(k) {
     if (!SCEN[k]) return;
@@ -757,6 +970,7 @@
   const numsEl = document.getElementById('pnums');
   function dimsText() {
     const fmt = function (v) { return String(Math.round(v * 10) / 10).replace('.', ','); };
+    if (S.fence) return 'пролёт ' + fmt(S.L) + ' м · стойки ' + fmt(S.HM) + ' м';
     return 'пролёт ' + S.L + ' × ' + S.W + ' м · ' + (S.roofMast
       ? 'стойки ' + fmt(S.HM - S.roofMast) + ' м над кровлей'
       : 'мачты ' + fmt(S.HM) + ' м');
@@ -851,7 +1065,7 @@
         if (c.visible) { hiddenList.push(c); c.visible = false; }
       });
       world.visible = false;
-      world.scale.setScalar(SCALE);
+      world.scale.setScalar(S.arScale || SCALE);
       document.getElementById('hud').style.display = 'none';
     }
     function exitVisual() {
@@ -904,7 +1118,7 @@
             if (!ring.visible) return;
             world.position.setFromMatrixPosition(ring.matrix);
             world.visible = true; placed = true; ring.visible = false;
-            say('Масштаб 1:220 · обойдите модель вокруг');
+            say('Масштаб 1:' + Math.round(1 / (S.arScale || SCALE)) + ' · обойдите модель вокруг');
           });
           sess.addEventListener('end', function () {
             session = null; hitSrc = null; refSpace = null; exitVisual();
